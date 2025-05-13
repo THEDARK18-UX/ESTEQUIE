@@ -1,31 +1,14 @@
 import re
-from sympy import symbols, Eq, solve
 
 # Función para analizar la fórmula química y obtener la cantidad de átomos por elemento
 def parse_formula(formula):
+    # Expresión regular para extraer el elemento y su cantidad
     elementos = re.findall(r'([A-Z][a-z]*)(\d*)', formula)
     resultado = {}
     for elemento, cantidad in elementos:
         cantidad = int(cantidad) if cantidad else 1
         resultado[elemento] = resultado.get(elemento, 0) + cantidad
     return resultado
-
-# Función para balancear la ecuación química
-def balancear_ecuacion(reactivos, productos):
-    todos = reactivos + productos
-    elementos = sorted(set(e for f in todos for e in parse_formula(f)))
-    n = len(todos)
-    x = symbols(f'x1:{n+1}')
-    ecuaciones = []
-
-    for el in elementos:
-        izq = sum(parse_formula(f).get(el, 0) * x[i] for i, f in enumerate(reactivos))
-        der = sum(parse_formula(f).get(el, 0) * x[i + len(reactivos)] for i, f in enumerate(productos))
-        ecuaciones.append(Eq(izq, der))
-
-    ecuaciones.append(Eq(x[0], 1))  # Normalizamos el primer coeficiente
-    solucion = solve(ecuaciones, x, dict=True)[0]
-    return [solucion.get(var, 1) for var in x]
 
 # Función para calcular la masa molar de una sustancia
 def calcular_masa_molar(formula):
@@ -35,9 +18,34 @@ def calcular_masa_molar(formula):
         "Ca": 40.08, "S": 32.07, "Fe": 55.85, "Zn": 65.38
     }
     elementos = parse_formula(formula)
+    # Sumamos las masas molares de los elementos según su cantidad
     return sum(masas_molares.get(el, 0) * cant for el, cant in elementos.items())
 
-# Función principal para pedir datos al usuario y realizar el cálculo
+# Función para realizar el cálculo estequiométrico
+def calcular_estequiometria(reactivos, productos, coef_reactivos, coef_productos, sust_dada, gramos_dados, sust_obj):
+    sustancias = reactivos + productos
+
+    # Encontrar el índice de las sustancias en la lista
+    idx_dada = sustancias.index(sust_dada)
+    idx_obj = sustancias.index(sust_obj)
+
+    # Calcular la masa molar de las sustancias
+    masa_dada = calcular_masa_molar(sust_dada)
+    masa_obj = calcular_masa_molar(sust_obj)
+
+    # Calcular los moles de la sustancia dada
+    moles_dada = gramos_dados / masa_dada
+
+    # Calcular la proporción estequiométrica entre los coeficientes
+    proporcion = coef_productos[idx_obj - len(reactivos)] / coef_reactivos[idx_dada]
+    moles_obj = moles_dada * proporcion
+
+    # Calcular los gramos de la sustancia a calcular
+    gramos_obj = moles_obj * masa_obj
+
+    return gramos_obj, moles_dada, masa_obj
+
+# Función principal
 def main():
     print("⚗️ Bienvenido a la aplicación de Cálculo Estequiométrico ⚗️")
     print("--------------------------------------------------------")
@@ -45,18 +53,23 @@ def main():
     # Entrada de reactivos y productos
     reactivos = input("Ingrese los reactivos (separados por coma, ej: H2, O2): ").replace(" ", "").split(",")
     productos = input("Ingrese los productos (separados por coma, ej: H2O): ").replace(" ", "").split(",")
-    
-    # Balanceo de la ecuación
-    coef = balancear_ecuacion(reactivos, productos)
-    n_reac = len(reactivos)
-    coef_reactivos = coef[:n_reac]
-    coef_productos = coef[n_reac:]
+
+    # Coeficientes balanceados (debes ingresarlos manualmente, por ejemplo, para la ecuación H2 + O2 → H2O)
+    print("\n⚠️ Ingrese los coeficientes balanceados para la ecuación química.")
+    print("Por ejemplo, para H2 + O2 → H2O, ingresa: 2 1 2 (correspondiente a 2 H2 + 1 O2 → 2 H2O)")
+
+    coef_entrada = input(f"Ingrese los coeficientes balanceados para las sustancias: {reactivos + productos}: ")
+    coef_balanceados = list(map(int, coef_entrada.split()))
+
+    # Separar los coeficientes en reactivos y productos
+    coef_reactivos = coef_balanceados[:len(reactivos)]
+    coef_productos = coef_balanceados[len(reactivos):]
 
     # Mostrar la ecuación balanceada
-    ecuacion = " + ".join(f"{int(c)} {r}" for c, r in zip(coef_reactivos, reactivos))
+    ecuacion = " + ".join(f"{c} {r}" for c, r in zip(coef_reactivos, reactivos))
     ecuacion += " → "
-    ecuacion += " + ".join(f"{int(c)} {p}" for c, p in zip(coef_productos, productos))
-    
+    ecuacion += " + ".join(f"{c} {p}" for c, p in zip(coef_productos, productos))
+
     print("\nEcuación balanceada:")
     print(ecuacion)
 
@@ -67,19 +80,9 @@ def main():
     sust_obj = input(f"Seleccione la sustancia a calcular (en gramos) de las siguientes: {sustancias} (excepto {sust_dada}): ")
 
     # Realizamos los cálculos
-    idx_dada = sustancias.index(sust_dada)
-    idx_obj = sustancias.index(sust_obj)
-    
-    masa_dada = calcular_masa_molar(sust_dada)
-    masa_obj = calcular_masa_molar(sust_obj)
-    
-    # Moles de la sustancia dada
-    moles_dada = gramos_dados / masa_dada
-    
-    # Proporción entre los coeficientes de la ecuación balanceada
-    proporcion = coef[idx_obj] / coef[idx_dada]
-    moles_obj = moles_dada * proporcion
-    gramos_obj = moles_obj * masa_obj
+    gramos_obj, moles_dada, masa_obj = calcular_estequiometria(
+        reactivos, productos, coef_reactivos, coef_productos, sust_dada, gramos_dados, sust_obj
+    )
 
     print("\n📊 Resultado:")
     print(f"- Moles de {sust_dada}: {moles_dada:.4f} mol")
